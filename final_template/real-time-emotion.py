@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ultralytics import YOLO
-import server
 
 # --- PyTorch Model Definition ---
 # Define your CNN architecture here
@@ -134,27 +133,7 @@ def analyze_emotions():
                     emotion = emotion_dict[max_val]
                     conf_val = confidence.item()
 
-                # LOGIC
-                current_time = time.time()
-                is_negative = max_val in {0, 1, 2, 5}
-                val_to_record = conf_val if is_negative else 0
 
-                if (current_time - baseline_stats['start_time'] < BASELINE_DURATION):
-                    baseline_stats['negative_faces'].append(val_to_record)
-                elif (baseline_stats['baseline_negative_avg'] == -1):
-                    baseline_stats['baseline_negative_avg'] = np.nan_to_num(np.mean(baseline_stats['negative_faces']))
-                    print(f"CALIBRATED. Baseline: {baseline_stats['baseline_negative_avg']:.2f}")
-                else: 
-                    rolling_stats['rolling_negative_faces'].append(val_to_record)
-                    if len(rolling_stats['rolling_negative_faces']) > WINDOW_SIZE:
-                        sampled_mean = np.mean(rolling_stats['rolling_negative_faces'])
-                        std = np.std(baseline_stats['negative_faces'])
-
-                        if (sampled_mean > baseline_stats['baseline_negative_avg'] + 1.5 * std):
-                            print("!!! SPIKE DETECTED !!!")
-                            server.update_data({"status": "spike", "val": float(sampled_mean)})
-                        
-                        rolling_stats['rolling_negative_faces'].clear()
 
                 cv2.putText(frame, f"{emotion} ({conf_val:.2f})", (x1, y1 - 10), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
