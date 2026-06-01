@@ -1,20 +1,16 @@
 import cv2
-import numpy as np
 import time
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from ultralytics import YOLO
+import torch.nn as nn
+import torch
+import torch.nn.functional as F
 
 # --- PyTorch Model Definition ---
-# Define your CNN architecture here
-import torch.nn.functional as F
-
-class myCNNModel(torch.nn.Module):
+class FacialExpressionCNN(torch.nn.Module):
     
     def __init__(self):
         
-        super(myCNNModel, self).__init__()
+        super(FacialExpressionCNN, self).__init__()
         
         # Convolution followed by ReLU activation and a Maxpool
         self.cnn1 = nn.Conv2d(in_channels=1, out_channels=32,
@@ -35,13 +31,17 @@ class myCNNModel(torch.nn.Module):
         self.bn3 = nn.BatchNorm2d(128)
 
         # Squishing down to fully connected chunk.
+        # self.fc1 = nn.Linear(128*6*6, 256)
+        # self.fc2 = nn.Linear(256, 7)
         self.fc1 = nn.Linear(128*6*6, 256)
-        self.fc2 = nn.Linear(256, 7)
+        self.fc3 = nn.Linear(256, 64)
+        self.fc2 = nn.Linear(64, 7)
 
         # Batch normalizations used:
         self.bn = nn.BatchNorm1d(256)
         self.bn1 = nn.BatchNorm2d(32)
         self.bn2 = nn.BatchNorm2d(64)
+        self.bn4 = nn.BatchNorm1d(64)
 
         # dropouts
         self.dropout = nn.Dropout(0.5)
@@ -54,7 +54,7 @@ class myCNNModel(torch.nn.Module):
         out = self.bn1(out)
         out = self.relu1(out)
         out = self.maxpool1(out)
-        out = self.dropout_conv(out) # *
+        #out = self.dropout_conv(out) # *
 
         # Convolution, batch normalization, ReLU, Maxpool
         out = self.cnn2(out)
@@ -77,6 +77,12 @@ class myCNNModel(torch.nn.Module):
         out = self.fc1(out)
         out = self.bn(out)
         out = F.relu(out)
+
+        out = self.dropout(out)
+        out = self.fc3(out)      # 256 -> 64
+        out = self.bn4(out)      # BN on 64
+        out = F.relu(out)
+
         out = self.dropout(out)
         out = self.fc2(out)
         
@@ -84,20 +90,14 @@ class myCNNModel(torch.nn.Module):
 
 # --- Initialization ---
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# SEARCHING FOR IT VVV
 face_model = YOLO("yolov11n-face.pt")
 
-emotion_model = myCNNModel().to(device)
-# Load weights (Ensure you have converted your .h5 to .pth or have a .pth file)
-# emotion_model.load_state_dict(torch.load("model.pth", map_location=device))
+emotion_model = FacialExpressionCNN().to(device)
+emotion_model.load_state_dict(torch.load("model2.pth", map_location=device))
 emotion_model.eval()
 
 emotion_dict = {0: "Angry", 1: "Disgusted", 2: "Fearful", 3: "Happy", 4: "Neutral", 5: "Sad", 6: "Surprised"}
-
-# --- Data Structures ---
-baseline_stats = {'negative_faces': [], 'baseline_negative_avg': -1, 'start_time': time.time()}
-BASELINE_DURATION = 30 
-rolling_stats = {'rolling_negative_faces': []}
-WINDOW_SIZE = 5
 
 def analyze_emotions():
     cap = cv2.VideoCapture(0) 
